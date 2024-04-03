@@ -7,7 +7,22 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
+import argparse
 
+
+def get_rarity_rank(rarity):
+    """
+    Converts a rarity string to a numerical rank.
+    """
+    rarity_ranking = {
+        "promo": 6,
+        "enchanted": 5,
+        "super_rare": 4,
+        "rare": 3,
+        "uncommon": 2,
+        "common": 1
+    }
+    return rarity_ranking.get(rarity, 0)
 
 def generate_pdf_with_custom_cards(image_folder, output_pdf_path):
     # A4 size in points: 595.27 x 841.89
@@ -100,20 +115,36 @@ def parse_search_text_with_quantity(text):
                 continue  # Skip lines that do not start with a number
     return search_items
 
-def generate_image_links(objects, search_text):
+def generate_image_links(objects, search_text, keep_rarest=False):
     """
-    Generates image links based on the parsed search text and the API response objects.
+    Generates image links based on the parsed search text.
+    Optionally filters to keep only the rarest (or most recent if rarities match) cards.
     """
     search_items = parse_search_text_with_quantity(search_text)
-    print(f"Search items: {search_items}")
     image_links = []
+
     for quantity, name, title in search_items:
-        for obj in objects:
-            if isinstance(obj, dict) and obj.get("name") == name and (title is None or obj.get("title") == title):
-                image_links.extend([obj["image"]] * quantity)
+        matching_cards = [obj for obj in objects if obj.get("name") == name and (title is None or obj.get("title") == title)]
+        
+        if keep_rarest and matching_cards:
+            # Define rarity ranking
+            def get_rarity_rank(rarity):
+                return {"promo": 6, "enchanted": 5, "super_rare": 4, "rare": 3, "uncommon": 2, "common": 1}.get(rarity, 0)
+            
+            # Sort cards by rarity and update date
+            matching_cards.sort(key=lambda x: (get_rarity_rank(x["rarity"]), x["updated_at"]), reverse=True)
+            
+            # Select the top card after sorting
+            selected_cards = matching_cards[:1]
+        else:
+            selected_cards = matching_cards
+        
+        for card in selected_cards:
+            image_links.extend([card["image"]] * quantity)
+
     return image_links
 
-def get_deck(path, deckname):
+def get_deck(path, deckname, keep_rarest=False):
     """
     Main function to get the deck, request card data, and save images.
     """
@@ -164,7 +195,7 @@ def get_deck(path, deckname):
         print("No data returned from API.")
         return
 
-    image_links = generate_image_links(data["cards"], contents)
+    image_links = generate_image_links(data["cards"], contents, keep_rarest)
     print(f"Found {len(image_links)} images.")
     if not os.path.exists(deckname):
         os.makedirs(deckname)
@@ -188,10 +219,17 @@ def get_deck(path, deckname):
     print("All images processed.")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python script.py <path_to_txt_file> <deckname>")
-        sys.exit(1)
+     # Create the parser
+    parser = argparse.ArgumentParser(description='Generate a PDF with custom cards.')
 
-    path = sys.argv[1]
-    deckname = sys.argv[2]
-    get_deck(path, deckname)
+    # Positional arguments
+    parser.add_argument('path', type=str, help='Path to the text file containing card information.')
+    parser.add_argument('deckname', type=str, help='Name of the deck (and output folder).')
+
+    # Optional arguments
+    parser.add_argument('-kr', '--keep_rarest', action='store_true', help='Keep only the rarest card for each name.')
+
+    # Parse arguments
+    args = parser.parse_args()
+    
+    get_deck(args.path, args.deckname, args.keep_rarest)
