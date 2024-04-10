@@ -25,16 +25,13 @@ def get_rarity_rank(rarity):
     return rarity_ranking.get(rarity, 0)
 
 def generate_pdf_with_custom_cards(image_folder, output_pdf_path):
-    # A4 size in points: 595.27 x 841.89
     page_width, page_height = A4
-    card_width, card_height = 2.5 * inch, 3.5 * inch  # Convert inches to points
+    card_width, card_height = 2.5 * inch, 3.5 * inch  # Card dimensions in points
 
     c = canvas.Canvas(output_pdf_path, pagesize=A4)
     images = [f for f in os.listdir(image_folder) if f.endswith('.png')]
     images_per_row = int(page_width // card_width)
     images_per_column = int(page_height // card_height)
-
-    # Calculate the offsets to center the grid on the page
     x_offset = (page_width - (images_per_row * card_width)) / 2
     y_offset = (page_height - (images_per_column * card_height)) / 2
 
@@ -56,7 +53,7 @@ def generate_pdf_with_custom_cards(image_folder, output_pdf_path):
                 c.line(x + dx, y + dy, x + dx + (corner_length if dx == 0 else -corner_length), y + dy)
                 # Vertical part of the corner
                 c.line(x + dx, y + dy, x + dx, y + dy + (corner_length if dy == 0 else -corner_length))
-    
+
     for index, image_name in enumerate(images):
         if index != 0 and index % (images_per_row * images_per_column) == 0:
             c.showPage()
@@ -65,11 +62,16 @@ def generate_pdf_with_custom_cards(image_folder, output_pdf_path):
         x = x_offset + row * card_width
         y = page_height - y_offset - (column + 1) * card_height
 
-        # Adjust path to your image location
         image_path = os.path.join(image_folder, image_name)
+        with Image.open(image_path) as img:
+            img_width, img_height = img.size
+            if img_width > img_height:  # Image is horizontal
+                img = img.rotate(90, expand=True)
+                img.save(image_path)  # Overwrite the original image with the rotated one
+
         # Draw the image
         c.drawImage(image_path, x, y, width=card_width, height=card_height, preserveAspectRatio=True)
-        # Draw cutting lines and corners for each card
+        # Draw cutting lines and corners
         draw_cutting_marks(x, y)
 
     c.save()
