@@ -108,7 +108,7 @@ def parse_search_text_with_quantity(text):
             try:
                 quantity = int(parts[0])
                 name_title = parts[1]
-                if "-" in name_title:
+                if " - " in name_title:
                     name, title = name_title.split(" - ", 1)
                     search_items.append((quantity, name.strip(), title.strip()))
                 else:
@@ -126,7 +126,14 @@ def generate_image_links(objects, search_text, keep_rarest=False):
     image_links = []
 
     for quantity, name, title in search_items:
-        matching_cards = [obj for obj in objects if obj.get("name") == name and (title is None or obj.get("title") == title)]
+        if name is None and title is not None:
+            matching_cards = [obj for obj in objects if obj.get("title").lower() == title.lower()]
+        else:
+            matching_cards = [obj for obj in objects if obj.get("name").lower() == name.lower() and (title is None or obj.get("title").lower() == title.lower())]
+        
+        if not matching_cards:
+            print(f"---ERROR: No matching cards found for {'title: ' + title if name is None else 'name: ' + name}--")
+            continue
         
         if keep_rarest and matching_cards:
             # Define rarity ranking
